@@ -376,7 +376,7 @@ class MongoNotebookManager(NotebookManager):
                 'name': new_name
             }
         }
-        self._connect_collection(self.checkpoint_collection).update(spec, modify)
+        self._connect_collection(self.checkpoint_collection).update(spec, modify, multi=True)
   
     # public checkpoint API
     def create_checkpoint(self, name, path=''):
