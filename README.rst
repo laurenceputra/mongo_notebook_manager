@@ -1,32 +1,52 @@
-#MongoNotebookManager
-
+MongoNotebookManager
+====================
 
 IPython Notebook Manager in MongoDB
 
-###required
+required
+~~~~~~~~
+
+::
 
     NotebookApp.notebook_manager_class=mongo_notebook_manager.MongoNotebookManager
 
-###optional
+optional
+~~~~~~~~
 
 Below are the arguments, with their default values
 
-####mongo_uri
+mongo\_uri
+^^^^^^^^^^
+
+::
 
     MongoNotebookManager.mongo_uri='mongodb://localhost:27017/'
 
-####replica_set
+replica\_set
+^^^^^^^^^^^^
+
+::
 
     MongoNotebookManager.replica_set=''
 
-####database_name
+database\_name
+^^^^^^^^^^^^^^
+
+::
 
     MongoNotebookManager.database_name='ipython'
 
-####notebook_collection
+notebook\_collection
+^^^^^^^^^^^^^^^^^^^^
+
+::
 
     MongoNotebookManager.notebook_collection='notebooks'
 
-####checkpoint_collection
+checkpoint\_collection
+^^^^^^^^^^^^^^^^^^^^^^
+
+::
 
     MongoNotebookManager.checkpoint_collection='checkpoints'
+
