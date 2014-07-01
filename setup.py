@@ -10,7 +10,7 @@ with open('README.rst') as file:
 
 setup(
     name='MongoNotebookManager',
-    version='0.1.4',
+    version='0.1.5',
     description='A notebook manager for IPython with MongoDB as the backend.',
     long_description=long_description,
     author='Laurence Putra',
