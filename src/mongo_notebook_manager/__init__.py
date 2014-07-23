@@ -1,6 +1,7 @@
 """A notebook manager for IPython with MongoDB as the backend."""
 
 from tornado import web
+import os
 
 from io import StringIO
 import datetime
@@ -11,7 +12,8 @@ from mongodb_proxy import MongoProxy
 
 from IPython.html.services.notebooks.nbmanager import NotebookManager
 from IPython.nbformat import current
-from IPython.utils.traitlets import Unicode, Bool, TraitError
+from IPython.utils.traitlets import Unicode, CBool
+
 
 def sort_key(item):
     """Case-insensitive sorting."""
@@ -20,6 +22,7 @@ def sort_key(item):
 #-----------------------------------------------------------------------------
 # Classes
 #-----------------------------------------------------------------------------
+
 
 class MongoNotebookManager(NotebookManager):
     #Useless variable that is required unfortunately
@@ -40,12 +43,14 @@ class MongoNotebookManager(NotebookManager):
     notebook_collection = Unicode('notebooks', config=True,
         help="Defines the collection in mongodb in which to store the notebooks"
     )
-    
+
     checkpoint_collection = Unicode('checkpoints', config=True,
         help="The collection name in which to keep notebook checkpoints"
     )
 
-    
+    checkpoints_history = CBool('checkpoints_history', config=True,
+        help="Save all checkpoints or keep only last"
+    )
 
     def __init__(self, **kwargs):
         super(MongoNotebookManager, self).__init__(**kwargs)
@@ -53,26 +58,25 @@ class MongoNotebookManager(NotebookManager):
             self._conn = self._connect_server()
         else:
             self._conn = self._connect_replica_set()
-    
-    
+
     def get_notebook_names(self, path=''):
         """List all notebook names in the notebook dir and path."""
         path = path.strip('/')
         spec = {'path': path}
-        fields = {'name':1}
+        fields = {'name': 1}
         notebooks = list(self._connect_collection(self.notebook_collection).find(spec,fields))
         names = [n['name'] for n in notebooks]
         return names
 
     def path_exists(self, path):
         """Does the API-style path (directory) actually exist?
-        
+
         Parameters
         ----------
         path : string
             The path to check. This is an API path (`/` separated,
             relative to base notebook-dir).
-        
+
         Returns
         -------
         exists : bool
@@ -111,7 +115,7 @@ class MongoNotebookManager(NotebookManager):
                 '$regex': prefix + '*'
             }
         }
-        fields = {'name':1}
+        fields = {'name': 1}
         notebooks = list(self._connect_collection(self.notebook_collection).find(spec,fields))
         names = [n['name'].lstrip(prefix) for n in notebooks]
 
@@ -126,17 +130,17 @@ class MongoNotebookManager(NotebookManager):
             'name': name
         }
         fields = {
-            'lastModified':1,
+            'lastModified': 1,
             'created': 1
         }
         notebook = self._connect_collection(self.notebook_collection).find_one(spec,fields)
         if notebook == None:
             raise IOError('directory does not exist: %r' % (path + '|' + name))
 
-        last_modified = notebooks[0]['lastModified']
-        created = notebooks[0]['created']
+        last_modified = notebook[0]['lastModified']
+        created = notebook[0]['created']
         # Create the notebook model.
-        model ={}
+        model = {}
         model['name'] = name
         model['path'] = path
         model['last_modified'] = last_modified
@@ -148,7 +152,7 @@ class MongoNotebookManager(NotebookManager):
         path = path.strip('/')
         notebook_names = self.get_notebook_names(path)
         notebooks = [self.get_notebook(name, path, content=False)
-                        for name in notebook_names if self.should_list(name)]
+                     for name in notebook_names if self.should_list(name)]
         notebooks = sorted(notebooks, key=sort_key)
         return notebooks
 
@@ -162,7 +166,7 @@ class MongoNotebookManager(NotebookManager):
             'name': name
         }
         fields = {
-            'lastModified':1,
+            'lastModified': 1,
             'created': 1
         }
         if content:
@@ -173,7 +177,7 @@ class MongoNotebookManager(NotebookManager):
         last_modified = notebook['lastModified']
         created = notebook['created']
         # Create the notebook model.
-        model ={}
+        model = {}
         model['name'] = name
         model['path'] = path
         model['last_modified'] = last_modified
@@ -204,9 +208,9 @@ class MongoNotebookManager(NotebookManager):
 
         # Save the notebook file
         nb = current.to_notebook_json(model['content'])
-        
+
         self.check_and_sign(nb, new_name, new_path)
-        
+
         if 'name' in nb['metadata']:
             nb['metadata']['name'] = u''
         try:
@@ -217,7 +221,7 @@ class MongoNotebookManager(NotebookManager):
                     'name': name
                 }
                 data = {
-                    '$set':{
+                    '$set': {
                         'content': f.getvalue(),
                         'lastModified': datetime.datetime.now(),
                     }
@@ -250,12 +254,13 @@ class MongoNotebookManager(NotebookManager):
             'name': name
         }
         fields = {
-            'name':1,
+            'name': 1,
         }
+
         notebook = self._connect_collection(self.notebook_collection).find_one(spec,fields)
-        if notebook == None:
+        if not notebook:
             raise web.HTTPError(404, u'Notebook does not exist: %s' % name)
-        
+
         # clear checkpoints
         self._connect_collection(self.checkpoint_collection).remove(spec)
         self._connect_collection(self.notebook_collection).remove(spec)
@@ -272,7 +277,7 @@ class MongoNotebookManager(NotebookManager):
             'name': new_name
         }
         fields = {
-            'name':1,
+            'name': 1,
         }
         notebook = self._connect_collection(self.notebook_collection).find_one(spec,fields)
         if notebook != None:
@@ -285,7 +290,7 @@ class MongoNotebookManager(NotebookManager):
                 'name': old_name
             }
             modify = {
-                '$set':{
+                '$set': {
                     'path': new_path,
                     'name': new_name
                 }
@@ -300,13 +305,13 @@ class MongoNotebookManager(NotebookManager):
             'name': old_name
         }
         modify = {
-            '$set':{
+            '$set': {
                 'path': new_path,
                 'name': new_name
             }
         }
         self._connect_collection(self.checkpoint_collection).update(spec, modify, multi=True)
-  
+
     # public checkpoint API
     def create_checkpoint(self, name, path=''):
         path = path.strip('/')
@@ -314,29 +319,35 @@ class MongoNotebookManager(NotebookManager):
             'path': path,
             'name': name
         }
+
         notebook = self._connect_collection(self.notebook_collection).find_one(spec)
+        chid = notebook['_id']
         del notebook['_id']
-        notebook = {'$set': notebook}
         cp_id = str(self._connect_collection(self.checkpoint_collection).find(spec).count())
-        last_modified = notebook['$set']["lastModified"]
-        spec['cp'] = cp_id
-        self._connect_collection(self.checkpoint_collection).update(spec, notebook, upsert=True)
-        
+
+        if self.checkpoints_history:
+            spec['cp'] = cp_id
+        else:
+            notebook['cp'] = cp_id
+            spec['id'] = chid
+
+        newnotebook = {'$set': notebook}
+
+        last_modified = notebook["lastModified"]
+        self._connect_collection(self.checkpoint_collection).update(spec, newnotebook, upsert=True)
+
         # return the checkpoint info
         return dict(id=cp_id, last_modified=last_modified)
-    
+
     def list_checkpoints(self, name, path=''):
         path = path.strip('/')
-        cp_id = "checkpoint"
         spec = {
             'path': path,
             'name': name,
         }
         checkpoints = list(self._connect_collection(self.checkpoint_collection).find(spec))
         return [dict(id=c['cp'], last_modified=c['lastModified']) for c in checkpoints]
-        
-        
-    
+
     def restore_checkpoint(self, checkpoint_id, name, path=''):
         path = path.strip('/')
         spec = {
@@ -348,15 +359,15 @@ class MongoNotebookManager(NotebookManager):
         checkpoint = self._connect_collection(self.checkpoint_collection).find_one(spec)
         print checkpoint
         if checkpoint == None:
-            raise web.HTTPError(404,
-                u'Notebook checkpoint does not exist: %s-%s' % (name, checkpoint_id)
+            raise web.HTTPError(
+                404, u'Notebook checkpoint does not exist: %s-%s' % (name, checkpoint_id)
             )
         del spec['cp']
         del checkpoint['cp']
         del checkpoint['_id']
         checkpoint = {'$set': checkpoint}
         self._connect_collection(self.notebook_collection).update(spec, checkpoint, upsert=True)
-    
+
     def delete_checkpoint(self, checkpoint_id, name, path=''):
         path = path.strip('/')
         spec = {
@@ -370,7 +381,7 @@ class MongoNotebookManager(NotebookManager):
                 u'Notebook checkpoint does not exist: %s%s-%s' % (path, name, checkpoint_id)
             )
         self._connect_collection(self.checkpoint_collection).remove(spec)
-    
+
     def info_string(self):
         return "Serving notebooks from mongodb"
 
@@ -379,10 +390,10 @@ class MongoNotebookManager(NotebookManager):
 
     #mongodb related functions
     def _connect_server(self):
-        return MongoProxy(pymongo.MongoClient(self.mongo_uri));
+        return MongoProxy(pymongo.MongoClient(self.mongo_uri))
 
     def _connect_replica_set(self):
-        return MongoProxy(pymongo.MongoReplicaSetClient(self.mongo_uri, self._replicaSet));
+        return MongoProxy(pymongo.MongoReplicaSetClient(self.mongo_uri, self._replicaSet))
 
     def _connect_collection(self, collection):
         if not self._conn.alive():
