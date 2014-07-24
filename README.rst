@@ -63,6 +63,13 @@ checkpoint\_collection
 
     MongoNotebookManager.checkpoint_collection='checkpoints'
 
+checkpoints\_history
+^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+    MongoNotebookManager.checkpoints_history=True
+
 Why did I build this?
 ---------------------
 

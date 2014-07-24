@@ -39,6 +39,10 @@ Below are the arguments, with their default values
 
     MongoNotebookManager.checkpoint_collection='checkpoints'
 
+####checkpoints_history
+
+    MongoNotebookManager.checkpoints_history=False
+
 ##Why did I build this?
 
 I was setting up IPython Notebook on heroku, and ran into the problem where heroku will remove the extra files after a while. Having used mongodb quite thoroughly before, and knowing the existence of the free mongodb host (up to 500mb, which I believe is more than enough for most users of IPython Notebook), mongolab, I decided to write a module that will enable persistence of the notebooks on heroku, hence this plugin.
