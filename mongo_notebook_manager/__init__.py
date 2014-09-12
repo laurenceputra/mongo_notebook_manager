@@ -62,7 +62,8 @@ class MongoNotebookManager(NotebookManager):
     def get_notebook_names(self, path=''):
         """List all notebook names in the notebook dir and path."""
         path = path.strip('/')
-        spec = {'path': path}
+        spec = {'path': path,
+                'type': 'notebook'}
         fields = {'name': 1}
         notebooks = list(self._connect_collection(self.notebook_collection).find(spec,fields))
         names = [n['name'] for n in notebooks]
@@ -82,6 +83,7 @@ class MongoNotebookManager(NotebookManager):
         exists : bool
             Whether the path is indeed a directory.
         """
+
         path = path.strip('/')
         if path != '':
             spec = {'path': path}
@@ -98,8 +100,10 @@ class MongoNotebookManager(NotebookManager):
         path = path.strip('/')
         spec = {
             'path': path,
-            'name': name
+            'name': name,
+            'type': 'notebook'
         }
+
         count = self._connect_collection(self.notebook_collection).find(spec).count()
         return count == 1
 
@@ -111,15 +115,14 @@ class MongoNotebookManager(NotebookManager):
             prefix = path + '/'
 
         spec = {
-            'path': {
-                '$regex': prefix + '*'
-            }
+            'path': prefix,
+            'type': 'directory'
         }
         fields = {'name': 1}
         notebooks = list(self._connect_collection(self.notebook_collection).find(spec,fields))
-        names = [n['name'].lstrip(prefix) for n in notebooks]
+        names = [n['name'].lstrip(prefix) for n in notebooks if '/' not in n['name']]
 
-        dirs = [self.get_dir_model(name, path) for name in names if name and '/' not in name]
+        dirs = [self.get_dir_model(name, path) for name in names]
         dirs = sorted(dirs, key=sort_key)
         return dirs
 
@@ -127,18 +130,20 @@ class MongoNotebookManager(NotebookManager):
         path = path.strip('/')
         spec = {
             'path': path,
-            'name': name
+            'name': name,
+            'type': 'directory'
         }
         fields = {
             'lastModified': 1,
             'created': 1
         }
+
         notebook = self._connect_collection(self.notebook_collection).find_one(spec,fields)
         if notebook == None:
             raise IOError('directory does not exist: %r' % (path + '|' + name))
 
-        last_modified = notebook[0]['lastModified']
-        created = notebook[0]['created']
+        last_modified = notebook['lastModified']
+        created = notebook['created']
         # Create the notebook model.
         model = {}
         model['name'] = name
@@ -163,7 +168,8 @@ class MongoNotebookManager(NotebookManager):
 
         spec = {
             'path': path,
-            'name': name
+            'name': name,
+            'type': 'notebook'
         }
         fields = {
             'lastModified': 1,
@@ -188,6 +194,23 @@ class MongoNotebookManager(NotebookManager):
                 nb = current.read(f, u'json')
             self.mark_trusted_cells(nb, name, path)
             model['content'] = nb
+        return model
+
+    def create_notebook(self, model=None, path=''):
+        """Create a new notebook and return its model with no content."""
+        path = path.strip('/')
+        if model is None:
+            model = {}
+        if 'content' not in model:
+            metadata = current.new_metadata(name=u'')
+            model['content'] = current.new_notebook(metadata=metadata)
+        if 'name' not in model:
+            model['name'] = self.increment_filename('Untitled', path)
+
+        model['path'] = path
+        model['type'] = 'notebook'
+        model = self.save_notebook(model, model['name'], model['path'])
+
         return model
 
     def save_notebook(self, model, name='', path=''):
@@ -222,6 +245,7 @@ class MongoNotebookManager(NotebookManager):
                 }
                 data = {
                     '$set': {
+                        'type': 'notebook',
                         'content': f.getvalue(),
                         'lastModified': datetime.datetime.now(),
                     }
@@ -234,8 +258,8 @@ class MongoNotebookManager(NotebookManager):
                 notebook = self._connect_collection(self.notebook_collection).update(spec,data, upsert=True)
         except Exception as e:
             raise web.HTTPError(400, u'Unexpected error while autosaving notebook: %s' % (e))
-
         model = self.get_notebook(new_name, new_path, content=False)
+
         return model
 
     def update_notebook(self, model, name, path=''):
@@ -355,9 +379,9 @@ class MongoNotebookManager(NotebookManager):
             'name': name,
             'cp': checkpoint_id
         }
-        print spec
+
         checkpoint = self._connect_collection(self.checkpoint_collection).find_one(spec)
-        print checkpoint
+
         if checkpoint == None:
             raise web.HTTPError(
                 404, u'Notebook checkpoint does not exist: %s-%s' % (name, checkpoint_id)

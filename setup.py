@@ -18,7 +18,7 @@ setup(
     url = 'https://github.com/laurenceputra/mongo_notebook_manager',
     license = 'GPL v3',
     packages = ['mongo_notebook_manager'],
-    package_dir = {'mongo_notebook_manager': 'src/mongo_notebook_manager'},
+    package_dir = {'mongo_notebook_manager': 'mongo_notebook_manager'},
     keywords = 'mongo notebook manager ipython database storage',
     classifiers=[
         'Development Status :: 3 - Alpha',
