@@ -30,6 +30,14 @@ class MongoContentsManager(FileContentsManager):
         help="The URI to connect to the MongoDB instance. Defaults to 'mongodb://localhost:27017/'"
     )
 
+    mongo_username = Unicode('', config=True,
+        help="The username to authenticate against notebook_collection. Default is empty."
+    )
+
+    mongo_password = Unicode('', config=True,
+        help="The password to authenticate against notebook_collection. Default is empty."
+    )
+
     replica_set = Unicode('', config=True,
         help="Replica set for mongodb, if any"
     )
@@ -86,8 +94,28 @@ class MongoContentsManager(FileContentsManager):
         """
         path = path.strip('/')
         os_path = self._get_os_path(name, path=path)
-        self.log.info(os.path.exists(os_path) or self._notebook_exists(path) or self._notebook_exists(name, path))
-        return os.path.exists(os_path) or self._notebook_exists(path) or self._notebook_exists(name, path)
+        return os.path.exists(os_path) or self._notebook_exists(name, path)
+
+    def file_exists(self, name, path=''):
+        """Returns True if the file exists, else returns False.
+
+        API-style wrapper for os.path.isfile
+
+        Parameters
+        ----------
+        name : string
+            The name of the file you are checking.
+        path : string
+            The relative path to the file's directory (with '/' as separator)
+
+        Returns
+        -------
+        exists : bool
+            Whether the file exists.
+        """
+        path = path.strip('/')
+        nbpath = self._get_os_path(name, path=path)
+        return os.path.isfile(nbpath) or self._notebook_exists(name, path)
 
     def _path_exists(self, path):
         """Does the API-style path (directory) actually exist?
@@ -123,57 +151,99 @@ class MongoContentsManager(FileContentsManager):
             'name': name,
             'type': 'notebook'
         }
-        print 'last notebook_extis query', spec
         count = self._connect_collection(self.notebook_collection).find(spec).count()
         return count == 1
 
-    def list_dirs(self, path):
+    # def list_dirs(self, path):
+    #     path = path.strip('/')
+    #     if path == '':
+    #         prefix = ''
+    #     else:
+    #         prefix = path + '/'
+
+    #     spec = {
+    #         'path': prefix,
+    #         'type': 'directory'
+    #     }
+    #     fields = {'name': 1}
+    #     notebooks = list(self._connect_collection(self.notebook_collection).find(spec,fields))
+    #     names = [n['name'].lstrip(prefix) for n in notebooks if '/' not in n['name']]
+
+    #     dirs = [self.get_dir_model(name, path) for name in names]
+    #     dirs = sorted(dirs, key=sort_key)
+    #     return dirs
+
+    def get_model(self, name, path='', content=True):
+        """ Takes a path and name for an entity and returns its model
+
+        Parameters
+        ----------
+        name : str
+            the name of the target
+        path : str
+            the API path that describes the relative path for the target
+
+        Returns
+        -------
+        model : dict
+            the contents model. If content=True, returns the contents
+            of the file or directory as well.
+        """
         path = path.strip('/')
-        if path == '':
-            prefix = ''
+
+        if not self.exists(name=name, path=path):
+            raise web.HTTPError(404, u'No such file or directory: %s/%s' % (path, name))
+
+        os_path = self._get_os_path(name, path)
+        if os.path.isdir(os_path):
+            if name is not None:
+                mongo_path = path + name
+            else:
+                mongo_path = path
+            # First get dir_model of real files. Then add notebooks from DB.
+
+            dir_fs = self._dir_model(name, path, content)
+            dir_mongo = self._dir_model_notebooks(mongo_path)
+            if dir_fs['content'] is not None:
+                dir_fs['content'] += dir_mongo
+            else:
+                dir_fs['content'] = dir_mongo
+
+            model = dir_fs
+        elif name.endswith('.ipynb'):
+            model = self._notebook_model(name, path, content)
         else:
-            prefix = path + '/'
-
-        spec = {
-            'path': prefix,
-            'type': 'directory'
-        }
-        fields = {'name': 1}
-        notebooks = list(self._connect_collection(self.notebook_collection).find(spec,fields))
-        names = [n['name'].lstrip(prefix) for n in notebooks if '/' not in n['name']]
-
-        dirs = [self.get_dir_model(name, path) for name in names]
-        dirs = sorted(dirs, key=sort_key)
-        return dirs
-
-    def get_dir_model(self, name, path=''):
-        path = path.strip('/')
-        spec = {
-            'path': path,
-            'name': name,
-            'type': 'directory'
-        }
-        fields = {
-            'lastModified': 1,
-            'created': 1
-        }
-
-        notebook = self._connect_collection(self.notebook_collection).find_one(spec,fields)
-        if notebook == None:
-            raise IOError('directory does not exist: %r' % (path + '|' + name))
-
-        last_modified = notebook['lastModified']
-        created = notebook['created']
-        # Create the notebook model.
-        model = {}
-        model['name'] = name
-        model['path'] = path
-        model['last_modified'] = last_modified
-        model['created'] = created
-        model['type'] = 'directory'
+            model = self._file_model(name, path, content)
         return model
 
-    def list_notebooks(self, path):
+    # def _notebook_model(self, name, path=''):
+    #     path = path.strip('/')
+    #     spec = {
+    #         'path': path,
+    #         'name': name,
+    #         'type': 'directory'
+    #     }
+    #     fields = {
+    #         'lastModified': 1,
+    #         'created': 1
+    #     }
+
+    #     notebook = self._connect_collection(self.notebook_collection).find_one(spec,fields)
+    #     if notebook == None:
+    #         raise IOError('directory does not exist: %r' % (path + '|' + name))
+
+    #     last_modified = notebook['lastModified']
+    #     created = notebook['created']
+    #     # Create the notebook model.
+    #     model = {}
+    #     model['name'] = name
+    #     model['path'] = path
+    #     model['last_modified'] = last_modified
+    #     model['created'] = created
+    #     model['type'] = 'directory'
+    #     return model
+
+    def _dir_model_notebooks(self, path): #list_notebooks
         path = path.strip('/')
         notebook_names = self._notebook_model_names(path)
         notebooks = [self._notebook_model(name, path, content=False)
@@ -183,11 +253,9 @@ class MongoContentsManager(FileContentsManager):
 
 
     def _notebook_model(self, name, path='', content=True):
-        self.log.info(path)
         path = path.strip('/')
-        print 'check exists', name, path
         if not self._notebook_exists(name=name, path=path):
-            raise web.HTTPError(404, u'Notebook does not exist: %s' % name)
+            raise web.HTTPError(404, u'Notebook does not existx: %s' % name)
 
         spec = {
             'path': path,
@@ -270,7 +338,7 @@ class MongoContentsManager(FileContentsManager):
                     '$set': {
                         'type': 'notebook',
                         'content': f.getvalue(),
-                        'lastModified': datetime.datetime.now(),
+                        'lastModified': datetime.datetime.utcnow(),
                     }
                 }
                 f.close()
@@ -278,6 +346,7 @@ class MongoContentsManager(FileContentsManager):
                     data['$set']['created'] = model['created']
                 else:
                     data['$set']['created'] = datetime.datetime.now()
+                self.log.info('Saving notebook %s to mongodb.' % name)
                 notebook = self._connect_collection(self.notebook_collection).update(spec,data, upsert=True)
         except Exception as e:
             raise web.HTTPError(400, u'Unexpected error while autosaving notebook: %s' % (e))
@@ -399,6 +468,7 @@ class MongoContentsManager(FileContentsManager):
         newnotebook = {'$set': notebook}
 
         last_modified = notebook["lastModified"]
+        self.log.info("Saving checkpoint for notebook %s" % name)
         self._connect_collection(self.checkpoint_collection).update(spec, newnotebook, upsert=True)
 
         # return the checkpoint info
@@ -431,6 +501,7 @@ class MongoContentsManager(FileContentsManager):
         del checkpoint['cp']
         del checkpoint['_id']
         checkpoint = {'$set': checkpoint}
+        self.log.info('Restoring checkpoint for notebook %s' % name)
         self._connect_collection(self.notebook_collection).update(spec, checkpoint, upsert=True)
 
     def delete_checkpoint(self, checkpoint_id, name, path=''):
@@ -456,11 +527,18 @@ class MongoContentsManager(FileContentsManager):
 
     def _connect_replica_set(self):
         return MongoProxy(pymongo.MongoReplicaSetClient(self.mongo_uri, self._replicaSet))
-
+    
     def _connect_collection(self, collection):
         if not self._conn.alive():
             if len(self.replica_set) == 0:
                 self._conn = self._connect_server()
             else:
                 self._conn = self._connectReplicaSet()
-        return self._conn[self.database_name][collection]
+        db = self._conn[self.database_name]
+        
+        # Authenticate against database
+        if self.mongo_username and self.mongo_password:
+            db.authenticate(self.mongo_username, self.mongo_password)
+        return db[collection]
+
+
