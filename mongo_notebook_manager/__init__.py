@@ -10,7 +10,7 @@ import pymongo
 
 from mongodb_proxy import MongoProxy
 
-from IPython.html.services.notebooks.nbmanager import NotebookManager
+from IPython.html.services.contents.filemanager import FileContentsManager
 from IPython.nbformat import current
 from IPython.utils.traitlets import Unicode, CBool
 
@@ -24,9 +24,7 @@ def sort_key(item):
 #-----------------------------------------------------------------------------
 
 
-class MongoNotebookManager(NotebookManager):
-    #Useless variable that is required unfortunately
-    notebook_dir = Unicode(u"", config=True)
+class MongoContentsManager(FileContentsManager):
 
     mongo_uri = Unicode('mongodb://localhost:27017/', config=True,
         help="The URI to connect to the MongoDB instance. Defaults to 'mongodb://localhost:27017/'"
@@ -53,13 +51,13 @@ class MongoNotebookManager(NotebookManager):
     )
 
     def __init__(self, **kwargs):
-        super(MongoNotebookManager, self).__init__(**kwargs)
+        super(MongoContentsManager, self).__init__(**kwargs)
         if len(self.replica_set) == 0:
             self._conn = self._connect_server()
         else:
             self._conn = self._connect_replica_set()
 
-    def get_notebook_names(self, path=''):
+    def _notebook_model_names(self, path=''):
         """List all notebook names in the notebook dir and path."""
         path = path.strip('/')
         spec = {'path': path,
@@ -69,7 +67,29 @@ class MongoNotebookManager(NotebookManager):
         names = [n['name'] for n in notebooks]
         return names
 
-    def path_exists(self, path):
+    def exists(self, name=None, path=''):
+        """Returns True if the path [and name] exists, else returns False.
+
+        API-style wrapper for os.path.exists
+
+        Parameters
+        ----------
+        name : string
+            The name of the file you are checking.
+        path : string
+            The relative path to the file's directory (with '/' as separator)
+
+        Returns
+        -------
+        exists : bool
+            Whether the target exists.
+        """
+        path = path.strip('/')
+        os_path = self._get_os_path(name, path=path)
+        self.log.info(os.path.exists(os_path) or self._notebook_exists(path) or self._notebook_exists(name, path))
+        return os.path.exists(os_path) or self._notebook_exists(path) or self._notebook_exists(name, path)
+
+    def _path_exists(self, path):
         """Does the API-style path (directory) actually exist?
 
         Parameters
@@ -96,14 +116,14 @@ class MongoNotebookManager(NotebookManager):
         #Nothing is hidden
         return False
 
-    def notebook_exists(self, name, path=''):
+    def _notebook_exists(self, name, path=''):
         path = path.strip('/')
         spec = {
             'path': path,
             'name': name,
             'type': 'notebook'
         }
-
+        print 'last notebook_extis query', spec
         count = self._connect_collection(self.notebook_collection).find(spec).count()
         return count == 1
 
@@ -155,15 +175,18 @@ class MongoNotebookManager(NotebookManager):
 
     def list_notebooks(self, path):
         path = path.strip('/')
-        notebook_names = self.get_notebook_names(path)
-        notebooks = [self.get_notebook(name, path, content=False)
+        notebook_names = self._notebook_model_names(path)
+        notebooks = [self._notebook_model(name, path, content=False)
                      for name in notebook_names if self.should_list(name)]
         notebooks = sorted(notebooks, key=sort_key)
         return notebooks
 
-    def get_notebook(self, name, path='', content=True):
+
+    def _notebook_model(self, name, path='', content=True):
+        self.log.info(path)
         path = path.strip('/')
-        if not self.notebook_exists(name=name, path=path):
+        print 'check exists', name, path
+        if not self._notebook_exists(name=name, path=path):
             raise web.HTTPError(404, u'Notebook does not exist: %s' % name)
 
         spec = {
@@ -213,14 +236,14 @@ class MongoNotebookManager(NotebookManager):
 
         return model
 
-    def save_notebook(self, model, name='', path=''):
+    def _save_notebook(self, os_path, model, name='', path=''):
         path = path.strip('/')
 
         if 'content' not in model:
             raise web.HTTPError(400, u'No notebook JSON data provided')
 
         # One checkpoint should always exist
-        if self.notebook_exists(name, path) and not self.list_checkpoints(name, path):
+        if self._notebook_exists(name, path) and not self.list_checkpoints(name, path):
             self.create_checkpoint(name, path)
 
         new_path = model.get('path', path).strip('/')
@@ -258,7 +281,7 @@ class MongoNotebookManager(NotebookManager):
                 notebook = self._connect_collection(self.notebook_collection).update(spec,data, upsert=True)
         except Exception as e:
             raise web.HTTPError(400, u'Unexpected error while autosaving notebook: %s' % (e))
-        model = self.get_notebook(new_name, new_path, content=False)
+        model = self._notebook_model(new_name, new_path, content=False)
 
         return model
 
@@ -268,7 +291,7 @@ class MongoNotebookManager(NotebookManager):
         new_path = model.get('path', path).strip('/')
         if path != new_path or name != new_name:
             self.rename_notebook(name, path, new_name, new_path)
-        model = self.get_notebook(new_name, new_path, content=False)
+        model = self._notebook_model(new_name, new_path, content=False)
         return model
 
     def delete_notebook(self, name, path=''):
@@ -280,14 +303,32 @@ class MongoNotebookManager(NotebookManager):
         fields = {
             'name': 1,
         }
-
-        notebook = self._connect_collection(self.notebook_collection).find_one(spec,fields)
+        notebook = self._connect_collection(self.notebook_collection).find_one(spec, fields)
         if not notebook:
             raise web.HTTPError(404, u'Notebook does not exist: %s' % name)
 
         # clear checkpoints
         self._connect_collection(self.checkpoint_collection).remove(spec)
         self._connect_collection(self.notebook_collection).remove(spec)
+
+    def update(self, model, name, path=''):
+        # TODO: is notebook, rename in db.
+        """Update the file's path and/or name
+
+        For use in PATCH requests, to enable renaming a file without
+        re-uploading its contents. Only used for renaming at the moment.
+        """
+        pass
+
+    def delete(self, name, path=''):
+        """Delete file by name and path."""
+        # TODO: if notebook file, just delet in db.
+        pass
+
+    def rename(self, old_name, old_path, new_name, new_path):
+        # TODO: add condition to rename notebooks in db, else call super()
+        pass
+
 
     def rename_notebook(self, old_name, old_path, new_name, new_path):
         old_path = old_path.strip('/')
@@ -408,9 +449,6 @@ class MongoNotebookManager(NotebookManager):
 
     def info_string(self):
         return "Serving notebooks from mongodb"
-
-    def get_kernel_path(self, name, path='', model=None):
-        return os.path.join(self.notebook_dir, path)
 
     #mongodb related functions
     def _connect_server(self):

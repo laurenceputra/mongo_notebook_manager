@@ -13,7 +13,7 @@ Then, when you start ipython notebook, make sure you have the following config s
 
 ###required
 
-    NotebookApp.notebook_manager_class=mongo_notebook_manager.MongoNotebookManager
+    c.NotebookApp.contents_manager_class='mongo_notebook_manager.MongoContentsManager'
 
 ###optional
 
@@ -21,27 +21,27 @@ Below are the arguments, with their default values
 
 ####mongo_uri
 
-    MongoNotebookManager.mongo_uri='mongodb://localhost:27017/'
+    c.NotebookApp.mongo_uri='mongodb://localhost:27017/'
 
 ####replica_set
 
-    MongoNotebookManager.replica_set=''
+    c.NotebookApp.replica_set=''
 
 ####database_name
 
-    MongoNotebookManager.database_name='ipython'
+    c.NotebookApp.database_name='ipython'
 
 ####notebook_collection
 
-    MongoNotebookManager.notebook_collection='notebooks'
+    c.NotebookApp.notebook_collection='notebooks'
 
 ####checkpoint_collection
 
-    MongoNotebookManager.checkpoint_collection='checkpoints'
+    c.NotebookApp.checkpoint_collection='checkpoints'
 
 ####checkpoints_history
 
-    MongoNotebookManager.checkpoints_history=False
+    c.NotebookApp.checkpoints_history=False
 
 ##Why did I build this?
 
