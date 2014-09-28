@@ -21,7 +21,7 @@ Below are the arguments, with their default values
 
 ####mongo_uri
 
-    c.NotebookApp.mongo_uri='mongodb://localhost:27017/'
+    c.NotebookApp.MongoContentsManager.mongo_uri='mongodb://localhost:27017/'
 
 ####replica_set
 
@@ -30,6 +30,12 @@ Below are the arguments, with their default values
 ####database_name
 
     c.NotebookApp.database_name='ipython'
+
+###Database username
+    c.NotebookApp.MongoContentsManager.mongo_username = 'my_container'
+
+###Database password
+    c.NotebookApp.MongoContentsManager.mongo_password = '12345'
 
 ####notebook_collection
 
