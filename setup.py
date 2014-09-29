@@ -31,4 +31,9 @@ setup(
     install_requires=[
         'pymongo'
     ],
+    entry_points={
+        'console_scripts': [
+            'notebooks_importer = mongo_notebook_manager.notebooks_importer:main'
+        ]
+    },
 )
