@@ -387,7 +387,13 @@ class MongoContentsManager(FileContentsManager):
         For use in PATCH requests, to enable renaming a file without
         re-uploading its contents. Only used for renaming at the moment.
         """
-        pass
+        path = path.strip('/')
+        new_name = model.get('name', name)
+        new_path = model.get('path', path).strip('/')
+        if path != new_path or name != new_name:
+            self.rename(name, path, new_name, new_path)
+        model = self.get_model(new_name, new_path, content=False)
+        return model
 
     def delete(self, name, path=''):
         """Delete file by name and path."""
@@ -395,11 +401,6 @@ class MongoContentsManager(FileContentsManager):
         pass
 
     def rename(self, old_name, old_path, new_name, new_path):
-        # TODO: add condition to rename notebooks in db, else call super()
-        pass
-
-
-    def rename_notebook(self, old_name, old_path, new_name, new_path):
         old_path = old_path.strip('/')
         new_path = new_path.strip('/')
         if new_name == old_name and new_path == old_path:
@@ -431,7 +432,7 @@ class MongoContentsManager(FileContentsManager):
             }
             self._connect_collection(self.notebook_collection).update(spec, modify)
         except Exception as e:
-            raise web.HTTPError(500, u'Unknown error renaming notebook: %s %s' % (old_os_path, e))
+            raise web.HTTPError(500, u'Unknown error renaming notebook: %s %s' % (old_name, e))
 
         # Move the checkpoints
         spec = {
