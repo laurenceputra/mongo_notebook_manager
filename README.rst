@@ -21,7 +21,7 @@ required
 
 ::
 
-    NotebookApp.notebook_manager_class=mongo_notebook_manager.MongoNotebookManager
+    c.NotebookApp.contents_manager_class='mongo_notebook_manager.MongoContentsManager'
 
 optional
 ~~~~~~~~
@@ -33,42 +33,56 @@ mongo\_uri
 
 ::
 
-    MongoNotebookManager.mongo_uri='mongodb://localhost:27017/'
+    c.NotebookApp.MongoContentsManager.mongo_uri='mongodb://localhost:27017/'
 
 replica\_set
 ^^^^^^^^^^^^
 
 ::
 
-    MongoNotebookManager.replica_set=''
+    c.NotebookApp.replica_set=''
 
 database\_name
 ^^^^^^^^^^^^^^
 
 ::
 
-    MongoNotebookManager.database_name='ipython'
+    c.NotebookApp.database_name='ipython'
+
+Database username
+~~~~~~~~~~~~~~~~~
+
+::
+
+    c.NotebookApp.MongoContentsManager.mongo_username = 'my_container'
+
+Database password
+~~~~~~~~~~~~~~~~~
+
+::
+
+    c.NotebookApp.MongoContentsManager.mongo_password = '12345'
 
 notebook\_collection
 ^^^^^^^^^^^^^^^^^^^^
 
 ::
 
-    MongoNotebookManager.notebook_collection='notebooks'
+    c.NotebookApp.notebook_collection='notebooks'
 
 checkpoint\_collection
 ^^^^^^^^^^^^^^^^^^^^^^
 
 ::
 
-    MongoNotebookManager.checkpoint_collection='checkpoints'
+    c.NotebookApp.checkpoint_collection='checkpoints'
 
 checkpoints\_history
-^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
 
 ::
 
-    MongoNotebookManager.checkpoints_history=True
+    c.NotebookApp.checkpoints_history=False
 
 Why did I build this?
 ---------------------
@@ -85,14 +99,14 @@ Bugs?
 
 This is still in Alpha stage, although most of the basic features are
 working. If you do find any bugs, please report issues to the `repo on
-Github <https://github.com/laurenceputra/mongo_notebook_manager/issues>`_.
+Github <https://github.com/laurenceputra/mongo_notebook_manager/issues>`__.
 
 Features?
 ---------
 
 If there are additional features that you are looking for, please create
 an issue over at our `repo on
-Github <https://github.com/laurenceputra/mongo_notebook_manager/issues>`_,
+Github <https://github.com/laurenceputra/mongo_notebook_manager/issues>`__,
 and we'll prioritize and get working on it.
 
 Pull requests?
@@ -101,5 +115,5 @@ Pull requests?
 If you wish to make things better, or fix one of the
 issues(bug/feature), please submit a pull request. However, please
 follow the `AngularJS commit message
-guideline <https://github.com/angular/angular.js/blob/master/CONTRIBUTING.md#commit>`_
+guideline <https://github.com/angular/angular.js/blob/master/CONTRIBUTING.md#commit>`__
 for your commit messages.
