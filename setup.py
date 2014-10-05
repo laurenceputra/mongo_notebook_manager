@@ -9,9 +9,9 @@ with open('README.rst') as file:
     long_description = file.read()
 
 setup(
-    name='MongoNotebookManager',
+    name='MongoContentManager',
     version='1.0.0',
-    description='A notebook manager for IPython with MongoDB as the backend.',
+    description='A content manager for IPython with MongoDB as the backend.',
     long_description=long_description,
     author='Laurence Putra',
     author_email='laurenceputra@gmail.com',
@@ -21,7 +21,7 @@ setup(
     package_dir = {'mongo_notebook_manager': 'mongo_notebook_manager'},
     keywords = 'mongo notebook manager ipython database storage',
     classifiers=[
-        'Development Status :: 5 - Production/Stable',
+        'Development Status :: 4 - Beta',
         'Topic :: Database :: Front-Ends',
         'Framework :: IPython',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
@@ -30,7 +30,7 @@ setup(
     ],
     install_requires=[
         'pymongo',
-        'ipython<3'
+        'ipython>=3'
     ],
     entry_points={
         'console_scripts': [
