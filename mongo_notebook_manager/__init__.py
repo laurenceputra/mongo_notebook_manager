@@ -200,8 +200,8 @@ class MongoContentsManager(FileContentsManager):
                 mongo_path = path + name
             else:
                 mongo_path = path
-            # First get dir_model of real files. Then add notebooks from DB.
 
+            # First get dir_model of real files. Then add notebooks from DB.
             dir_fs = self._dir_model(name, path, content)
             dir_mongo = self._dir_model_notebooks(mongo_path)
             if dir_fs['content'] is not None:
@@ -264,7 +264,7 @@ class MongoContentsManager(FileContentsManager):
         }
         fields = {
             'lastModified': 1,
-            'created': 1
+            'created': 1,
         }
         if content:
             fields['content'] = 1
@@ -280,6 +280,7 @@ class MongoContentsManager(FileContentsManager):
         model['last_modified'] = last_modified
         model['created'] = created
         model['type'] = 'notebook'
+        model['format'] = 'json'
         if content:
             with StringIO(notebook['content']) as f:
                 nb = current.read(f, u'json')
@@ -397,8 +398,10 @@ class MongoContentsManager(FileContentsManager):
 
     def delete(self, name, path=''):
         """Delete file by name and path."""
-        # TODO: if notebook file, just delet in db.
-        pass
+        if name.endswith('ipynb'):
+            self.delete_notebook(name, path='')
+        else:
+            super(self.__class__, self).delete(name, path)
 
     def rename(self, old_name, old_path, new_name, new_path):
         old_path = old_path.strip('/')
