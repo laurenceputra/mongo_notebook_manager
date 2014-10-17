@@ -399,7 +399,7 @@ class MongoContentsManager(FileContentsManager):
     def delete(self, name, path=''):
         """Delete file by name and path."""
         if name.endswith('ipynb'):
-            self.delete_notebook(name, path='')
+            self.delete_notebook(name, path=path)
         else:
             super(self.__class__, self).delete(name, path)
 
